@@ -8,7 +8,7 @@ namespace PSMouse
 {
     static class Program
     {
-        public const string VERSION = "181231";
+        public const string VERSION = "190112";
         /// <summary>
         /// アプリケーションのメイン エントリ ポイントです。
         /// </summary>

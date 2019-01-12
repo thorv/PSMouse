@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -7,6 +8,7 @@ using System.IO.Ports;
 using System.Linq;
 using System.Management;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -20,11 +22,10 @@ namespace PSMouse
         bool portOpen = false;
         public MainForm(PSMouse psMouse)
         {
+            InitializeComponent();
             psm = psMouse;
             HeightMin = Size.Height;
             Text = "PSMouse " + Program.VERSION;
-
-            InitializeComponent();
         }
         private void DrawForm()
         {
@@ -181,25 +182,62 @@ namespace PSMouse
             if (PortsTable == null || refresh)
             {
                 PortsTable = new SortedDictionary<string, string>(new SortRule());
-                var mcW32Devs = new ManagementClass("Win32_PnPEntity");
                 var ports = SerialPort.GetPortNames().ToList<String>();
                 var portlist = ports.Distinct();//portsに重複がある場合があるので取り除く
-                var dev = mcW32Devs.GetInstances().Cast<ManagementObject>().ToList();
-                var caps = dev.Where(x => ((string)(x.GetPropertyValue("PNPClass")) ?? string.Empty).Contains("Ports"));
-                try
+                string[] caps = GetDeviceNames();
+                foreach (var port in portlist)
                 {
-                    foreach (var port in portlist)
+                    string portInfo = string.Empty;
+                    if (caps != null)
                     {
-                        var cap = caps.Where(x => ((string)(x.GetPropertyValue("Caption"))).Contains(port));
-                        PortsTable.Add(port, ((string)(cap.First().GetPropertyValue("Caption"))));
+                        var cap = caps.Where(x => x.Contains(port));
+                        if (cap.Count() != 0)
+                        {
+                            portInfo = cap.First();
+                        }
                     }
-                }
-                catch (System.InvalidOperationException ex)
-                {
-                    PortsTable = new SortedDictionary<string, string>();
+
+                    PortsTable.Add(port,portInfo);
                 }
             }
             return PortsTable;
+        }
+        public static string[] GetDeviceNames()
+        {
+            List<string> devNames = new List<string>();
+            Regex regCom = new Regex("(COM[1-9][0-9]?[0-9]?)");
+
+            // PnPデバイス
+            ManagementClass mcPnPEntity = new ManagementClass("Win32_PnPEntity");
+            ManagementObjectCollection manageObjCol = mcPnPEntity.GetInstances();
+
+            foreach (ManagementObject manageObj in manageObjCol)
+            {
+                var propName = manageObj.GetPropertyValue("Name");
+                if (propName == null)
+                {
+                    continue;
+                }
+
+                //NameがCOMを含む
+                string name = propName.ToString();
+                if (regCom.IsMatch(name))
+                {
+                    devNames.Add(name);
+                }
+            }
+
+            string[] deviceNames = null;
+            if (devNames.Count > 0)
+            {
+                deviceNames = new string[devNames.Count];
+                int index = 0;
+                foreach (var name in devNames)
+                {
+                    deviceNames[index++] = name.ToString();
+                }
+            }
+            return deviceNames;
         }
         public sealed class SortRule : IComparer<String>
         {
